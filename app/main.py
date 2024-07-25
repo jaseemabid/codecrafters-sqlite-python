@@ -1,16 +1,101 @@
+import pprint as pp
+import struct
 import sys
-
 from dataclasses import dataclass
+from enum import Enum
+
+DB_HEADER_SIZE = 100
+PAGE_HEADER_SIZE = 12
+
+# fmt: off
+DB_HEADER = [
+    (">", 0),    # Force big endian
+    ("16s", 16), # Intro "SQLite format 3\000"
+    ("h", 2),    # Page size in bytes
+    ("b", 1),    # Write version
+    ("b", 1),    # Read version
+    ("b", 1),    # Reserved space
+    ("7x", 7),   # Unimportant
+    ("i ", 4),   # Size of the database file in pages
+    ("68x", 68), # Rest of the header
+]
+# fmt: on
+
+
+# fmt: off
+PAGE_HEADER = [
+    (">", 0),  # Force big endian
+    ("b", 1),  # Flag indicating the b-tree page type
+    ("h", 2),  # Start of the first freeblock on the page
+    ("h", 2),  # Number of cells on page
+    ("h", 2),  # Start of the cell content area
+    ("b", 1),  # Number of fragmented free bytes
+    ("i", 4),  # Right-most pointer
+]
+# fmt: on
 
 
 @dataclass
-class Header:
-    offset: int
-    size: int
+class DBHeader:
+    banner: str
+    page_size: int
+    page_count: int
+    write_version: int
+    read_version: int
+    reserved: int
+
+    @staticmethod
+    def parse(bs: bytes) -> "DBHeader":
+        fmt = "".join([f for (f, _) in DB_HEADER])
+        size = sum([i for (_, i) in DB_HEADER])
+
+        assert size == DB_HEADER_SIZE
+        assert struct.calcsize(fmt) == size
+        assert len(bs) == size
+
+        return DBHeader(*struct.unpack(fmt, bs))
 
 
-PAGE_SIZE = Header(16, 2)
-PAGE_COUNT = Header(28, 4)
+class PageKind(Enum):
+    InteriorIndex = 2  # An interior index b-tree page.
+    InteriorTable = 5  # An interior table b-tree page.
+    LeafIndex = 10  # A leaf index b-tree page.
+    LeafTable = 13  # a leaf table b-tree page.
+
+
+@dataclass
+class PageHeader:
+    """
+    The b-tree page header is 8 bytes in size for leaf pages
+    and 12 bytes for interior pages
+    """
+
+    kind: PageKind
+    first_free_block: int
+    number_of_cells: int
+    start_of_cell_content: int
+    number_of_free_bytes: int
+    right_most_pointer: int | None = None
+
+    @staticmethod
+    def parse(bs: bytes) -> "PageHeader":
+        fmt = "".join([f for (f, _) in PAGE_HEADER])
+        size = sum([i for (_, i) in PAGE_HEADER])
+
+        assert size == PAGE_HEADER_SIZE
+        assert struct.calcsize(fmt) == size
+        assert len(bs) == size
+
+        vals = struct.unpack(fmt, bs)
+
+        kind = PageKind(vals[0])
+        match kind:
+            case PageKind.InteriorIndex | PageKind.InteriorTable:
+                vals = (kind, *vals[1:6])
+            case PageKind.LeafIndex | PageKind.LeafTable:
+                vals = (kind, *vals[1:5])
+
+        return PageHeader(*vals)  # type: ignore
 
 
 class Page:
@@ -25,30 +110,23 @@ class Page:
     - The reserved region.
     """
 
-    DB_HEADER_SIZE = 100
-    TREE_HEADER_SIZE = (8, 12)
+    # def __init__(self, index: int, size: int, database: FileIO) -> None:
+    # pass
 
-
-# import sqlparse - available if you need it!
 
 database_file_path = sys.argv[1]
 command = sys.argv[2]
 
 if command == ".dbinfo":
     with open(database_file_path, "rb") as database_file:
-        database_file.seek(PAGE_SIZE.offset)  # Skip the first 16 bytes of the header
-        page_size = int.from_bytes(database_file.read(PAGE_SIZE.size))
+        db_header = DBHeader.parse(database_file.read(DB_HEADER_SIZE))
+        page_header = PageHeader.parse(database_file.read(PAGE_HEADER_SIZE))
 
-        database_file.seek(PAGE_COUNT.offset, 0)  # Offset from beginning of file
-        page_count = int.from_bytes(database_file.read(PAGE_COUNT.size))
+        print(f"{pp.pformat(db_header)}", end="\n\n")
+        print(f"{pp.pformat(page_header)}", end="\n\n")
 
-        database_file.seek(Page.DB_HEADER_SIZE)
-        page = database_file.read(page_size - Page.DB_HEADER_SIZE)
-
-        print(f"database page size: {page_size}")
-        print(f"database page count: {page_count}")
-
-        print(f"Raw page contents: \n{page.decode('utf-8', errors='replace')}")
+        print(f"database page size: {db_header.page_size}")
+        print(f"database page count: {db_header.page_count}")
 
 else:
     print(f"Invalid command: {command}")

@@ -127,6 +127,8 @@ if command == ".dbinfo":
 
         print(f"database page size: {db_header.page_size}")
         print(f"database page count: {db_header.page_count}")
+        # This is an approximation that only works in simple cases.
+        print(f"number of tables: {page_header.number_of_cells}")
 
 else:
     print(f"Invalid command: {command}")

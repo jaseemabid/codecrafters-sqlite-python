@@ -13,10 +13,10 @@ name = "pypi"
 
 [packages]
 sqlparse = "*"
-ipython = "*"
-ruff = "*"
 
 [dev-packages]
+ipython = "*"
+ruff = "*"
 
 [requires]
 python_version = "3"

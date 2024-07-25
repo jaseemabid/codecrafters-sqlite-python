@@ -98,6 +98,23 @@ class PageHeader:
         return PageHeader(*vals)  # type: ignore
 
 
+@dataclass
+class DBInfo:
+    db_header: DBHeader
+    page_header: PageHeader
+
+    def __post_init__(self):
+        # NOTE: Approximation that only works in simple cases.
+        self.number_of_tables = self.page_header.number_of_cells
+
+    def __str__(self):
+        return (
+            f"database page size: {self.db_header.page_size}\n"
+            f"database page count: {self.db_header.page_count}\n"
+            f"number of tables: {self.number_of_tables}\n"
+        )
+
+
 class Page:
     """
     A b-tree page is divided into regions in the following order:
@@ -114,10 +131,7 @@ class Page:
     # pass
 
 
-database_file_path = sys.argv[1]
-command = sys.argv[2]
-
-if command == ".dbinfo":
+def db_info(database_file_path) -> DBInfo:
     with open(database_file_path, "rb") as database_file:
         db_header = DBHeader.parse(database_file.read(DB_HEADER_SIZE))
         page_header = PageHeader.parse(database_file.read(PAGE_HEADER_SIZE))
@@ -125,10 +139,14 @@ if command == ".dbinfo":
         print(f"{pp.pformat(db_header)}", end="\n\n")
         print(f"{pp.pformat(page_header)}", end="\n\n")
 
-        print(f"database page size: {db_header.page_size}")
-        print(f"database page count: {db_header.page_count}")
-        # This is an approximation that only works in simple cases.
-        print(f"number of tables: {page_header.number_of_cells}")
+        return DBInfo(db_header, page_header)
 
-else:
-    print(f"Invalid command: {command}")
+
+if __name__ == "__main__":
+    database_file_path = sys.argv[1]
+    command = sys.argv[2]
+
+    if command == ".dbinfo":
+        print(db_info(database_file_path))
+    else:
+        print(f"Invalid command: {command}")

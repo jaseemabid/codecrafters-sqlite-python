@@ -17,6 +17,7 @@ sqlparse = "*"
 [dev-packages]
 ipython = "*"
 ruff = "*"
+pytest = "*"
 
 [requires]
 python_version = "3"

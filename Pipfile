@@ -21,3 +21,6 @@ pytest = "*"
 
 [requires]
 python_version = "3"
+
+[scripts]
+dbinfo = "./your_program.sh sample.db .dbinfo"
